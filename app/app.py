@@ -14,7 +14,8 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-    csv_files = glob.glob('*.csv')
+    csv_files = glob.glob(os.path.join(app.root_path, '..', '*.csv'))
+    csv_files = [os.path.basename(file) for file in csv_files]
     return render_template('index.html', csv_files=csv_files, results=None)
 
 @app.route('/regressao', methods=['POST'])
@@ -23,7 +24,7 @@ def regressao():
     if not csv_file:
         return render_template('index.html', error='Nenhum arquivo CSV selecionado.')
 
-    df = pd.read_csv(csv_file)
+    df = pd.read_csv(os.path.join(app.root_path, '..', csv_file))
     variables = df.columns.tolist()
 
     if request.form.get('submit_vars'):
