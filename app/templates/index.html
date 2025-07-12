@@ -14,37 +14,25 @@
     {% endif %}
 
     <form action="/regressao" method="post">
-        {% if not csv_file %}
-            <label for="csv_file">Escolha um arquivo CSV:</label>
-            <select name="csv_file" id="csv_file">
-                {% for file in csv_files %}
-                    <option value="{{ file }}">{{ file }}</option>
+        <h2>Selecione as Variáveis</h2>
+
+        <div class="variables">
+            <div class="x-vars">
+                <h3>Variáveis Independentes (X)</h3>
+                {% for var in variables %}
+                    <input type="checkbox" name="x_vars" value="{{ var }}"> {{ var }}<br>
                 {% endfor %}
-            </select>
-            <br><br>
-            <input type="submit" value="Carregar Variáveis">
-        {% else %}
-            <input type="hidden" name="csv_file" value="{{ csv_file }}">
-            <h2>Variáveis do arquivo: {{ csv_file }}</h2>
-
-            <div class="variables">
-                <div class="x-vars">
-                    <h3>Variáveis Independentes (X)</h3>
-                    {% for var in variables %}
-                        <input type="checkbox" name="x_vars" value="{{ var }}"> {{ var }}<br>
-                    {% endfor %}
-                </div>
-                <div class="y-var">
-                    <h3>Variável Dependente (y)</h3>
-                    {% for var in variables %}
-                        <input type="radio" name="y_var" value="{{ var }}"> {{ var }}<br>
-                    {% endfor %}
-                </div>
             </div>
+            <div class="y-var">
+                <h3>Variável Dependente (y)</h3>
+                {% for var in variables %}
+                    <input type="radio" name="y_var" value="{{ var }}"> {{ var }}<br>
+                {% endfor %}
+            </div>
+        </div>
 
-            <br>
-            <input type="submit" name="submit_vars" value="Executar Regressão">
-        {% endif %}
+        <br>
+        <input type="submit" name="submit_vars" value="Executar Regressão">
     </form>
 
     {% if results %}

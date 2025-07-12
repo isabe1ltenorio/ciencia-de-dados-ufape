@@ -12,76 +12,95 @@ import datetime
 
 app = Flask(__name__)
 
+def get_all_variables():
+    csv_files = glob.glob(os.path.join(app.root_path, '..', '*.csv'))
+    all_vars = set()
+    for file in csv_files:
+        df = pd.read_csv(file)
+        all_vars.update(df.columns)
+    return sorted(list(all_vars))
+
 @app.route('/')
 def index():
-    csv_files = glob.glob(os.path.join(app.root_path, '..', '*.csv'))
-    csv_files = [os.path.basename(file) for file in csv_files]
-    return render_template('index.html', csv_files=csv_files, results=None)
+    variables = get_all_variables()
+    return render_template('index.html', variables=variables, results=None)
 
 @app.route('/regressao', methods=['POST'])
 def regressao():
-    csv_file = request.form.get('csv_file')
-    if not csv_file:
-        return render_template('index.html', error='Nenhum arquivo CSV selecionado.')
+    variables = get_all_variables()
+    x_vars = request.form.getlist('x_vars')
+    y_var = request.form.get('y_var')
 
-    df = pd.read_csv(os.path.join(app.root_path, '..', csv_file))
-    variables = df.columns.tolist()
+    if not x_vars or not y_var:
+        return render_template('index.html', error='Selecione pelo menos uma variável independente (X) e uma dependente (y).', variables=variables)
 
-    if request.form.get('submit_vars'):
-        x_vars = request.form.getlist('x_vars')
-        y_var = request.form.get('y_var')
+    if len(y_var.split()) > 1:
+        return render_template('index.html', error='Selecione apenas uma variável dependente (y).', variables=variables)
 
-        if not x_vars or not y_var:
-            return render_template('index.html', error='Selecione pelo menos uma variável independente (X) e uma dependente (y).', csv_file=csv_file, variables=variables)
+    csv_files = glob.glob(os.path.join(app.root_path, '..', '*.csv'))
+    df = pd.concat([pd.read_csv(file) for file in csv_files], ignore_index=True)
 
-        if len(y_var.split()) > 1:
-            return render_template('index.html', error='Selecione apenas uma variável dependente (y).', csv_file=csv_file, variables=variables)
+    required_vars = x_vars + [y_var]
+    df_filtered = df.dropna(subset=required_vars)
 
-        X = df[x_vars]
-        y = df[y_var]
+    for var in required_vars:
+        df_filtered[var] = pd.to_numeric(df_filtered[var], errors='coerce')
 
-        model = LinearRegression()
-        model.fit(X, y)
+    df_filtered = df_filtered.dropna(subset=required_vars)
 
-        y_pred = model.predict(X)
 
-        mse = mean_squared_error(y, y_pred)
-        r2 = r2_score(y, y_pred)
+    X = df_filtered[x_vars]
+    y = df_filtered[y_var]
 
-        plt.figure(figsize=(10, 5))
+    if X.empty or y.empty:
+        return render_template('index.html', error='Não há dados numéricos suficientes para as variáveis selecionadas.', variables=variables)
 
-        # Scatter plot
-        plt.subplot(1, 2, 1)
-        plt.scatter(X, y, color='blue')
-        plt.plot(X, y_pred, color='red', linewidth=2)
-        plt.title('Regressão Linear')
-        plt.xlabel(x_vars[0])
-        plt.ylabel(y_var)
 
-        # Residuals plot
-        plt.subplot(1, 2, 2)
-        plt.scatter(y_pred, y - y_pred, color='green')
-        plt.hlines(y=0, xmin=y_pred.min(), xmax=y_pred.max(), color='red', linewidth=2)
-        plt.title('Gráfico de Resíduos')
-        plt.xlabel('Valores Previstos')
-        plt.ylabel('Resíduos')
+    model = LinearRegression()
+    model.fit(X, y)
 
-        img = io.BytesIO()
-        plt.savefig(img, format='png')
-        img.seek(0)
-        plot_url = base64.b64encode(img.getvalue()).decode()
+    y_pred = model.predict(X)
 
-        results = {
-            'mse': mse,
-            'r2': r2,
-            'plot_url': plot_url,
-            'sklearn_version': sklearn.__version__,
-            'timestamp': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
+    mse = mean_squared_error(y, y_pred)
+    r2 = r2_score(y, y_pred)
 
-        return render_template('index.html', results=results, csv_file=csv_file, variables=variables)
+    plt.figure(figsize=(10, 5))
 
-    return render_template('index.html', csv_file=csv_file, variables=variables)
+    # Scatter plot
+    plt.subplot(1, 2, 1)
+    # Since we can have multiple X, we plot the first one for simplicity
+    plt.scatter(X.iloc[:, 0], y, color='blue', alpha=0.5)
+    # To plot the regression line, we need to handle multiple dimensions.
+    # A common approach is to plot predicted vs actual values.
+    plt.scatter(y_pred, y, color='red', alpha=0.5)
+    plt.plot([y.min(), y.max()], [y.min(), y.max()], 'k--', lw=2)
+    plt.title('Regressão Linear: Previsto vs. Real')
+    plt.xlabel('Valores Previstos')
+    plt.ylabel('Valores Reais')
+
+
+    # Residuals plot
+    plt.subplot(1, 2, 2)
+    plt.scatter(y_pred, y - y_pred, color='green')
+    plt.hlines(y=0, xmin=y_pred.min(), xmax=y_pred.max(), color='red', linewidth=2)
+    plt.title('Gráfico de Resíduos')
+    plt.xlabel('Valores Previstos')
+    plt.ylabel('Resíduos')
+
+    img = io.BytesIO()
+    plt.savefig(img, format='png')
+    img.seek(0)
+    plot_url = base64.b64encode(img.getvalue()).decode()
+
+    results = {
+        'mse': mse,
+        'r2': r2,
+        'plot_url': plot_url,
+        'sklearn_version': sklearn.__version__,
+        'timestamp': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+    return render_template('index.html', results=results, variables=variables)
 
 
 if __name__ == '__main__':
